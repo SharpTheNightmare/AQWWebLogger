@@ -1,0 +1,147 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* AQW Bot Logger Design System */
+@layer base {
+  :root {
+    /* Gaming-inspired dark theme with cyber accents */
+    --background: 215 28% 7%;
+    --foreground: 210 40% 98%;
+
+    --card: 217 32% 12%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 217 32% 12%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 196 100% 50%;
+    --primary-foreground: 215 28% 7%;
+
+    --secondary: 217 32% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 32% 15%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 280 100% 70%;
+    --accent-foreground: 215 28% 7%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 32% 17%;
+    --input: 217 32% 17%;
+    --ring: 196 100% 50%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 210 40% 98%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 215 28% 7%;
+
+    --info: 196 100% 50%;
+    --info-foreground: 215 28% 7%;
+
+    --radius: 0.75rem;
+
+    /* Custom gaming gradients */
+    --gradient-cyber: linear-gradient(135deg, hsl(196 100% 50%), hsl(280 100% 70%));
+    --gradient-dark: linear-gradient(180deg, hsl(217 32% 12%), hsl(215 28% 7%));
+    --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(120 100% 25%));
+    --gradient-warning: linear-gradient(135deg, hsl(38 92% 50%), hsl(25 95% 53%));
+    
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    
+    /* Shadows with cyber glow */
+    --shadow-cyber: 0 0 20px hsl(196 100% 50% / 0.3);
+    --shadow-card: 0 4px 20px hsl(217 32% 5% / 0.5);
+    --shadow-elevated: 0 8px 30px hsl(217 32% 5% / 0.8);
+  }
+
+  .dark {
+    /* Same values for consistent dark theme */
+    --background: 215 28% 7%;
+    --foreground: 210 40% 98%;
+    --card: 217 32% 12%;
+    --card-foreground: 210 40% 98%;
+    --popover: 217 32% 12%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 196 100% 50%;
+    --primary-foreground: 215 28% 7%;
+    --secondary: 217 32% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 32% 15%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 280 100% 70%;
+    --accent-foreground: 215 28% 7%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 32% 17%;
+    --input: 217 32% 17%;
+    --ring: 196 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background: linear-gradient(135deg, hsl(var(--background)), hsl(217 32% 5%));
+    min-height: 100vh;
+  }
+
+  /* Cyber scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-muted/20;
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+    filter: brightness(1.2);
+  }
+
+  /* Custom animations */
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 5px hsl(var(--primary) / 0.5); }
+    50% { box-shadow: 0 0 20px hsl(var(--primary) / 0.8), 0 0 30px hsl(var(--primary) / 0.3); }
+  }
+
+  @keyframes slide-up {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s infinite;
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.5s ease-out;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}

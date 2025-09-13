@@ -1,0 +1,422 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { 
+  Activity, 
+  Bot, 
+  Circle, 
+  Loader2, 
+  MessageSquare, 
+  Play, 
+  Send, 
+  Shield, 
+  Trash2, 
+  User,
+  Zap
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+interface ClientStatus {
+  loaded: boolean;
+  logged: boolean;
+  scriptRunning: boolean;
+  loadedScript: string;
+}
+
+interface Client {
+  id: string;
+  name: string;
+  status: ClientStatus;
+  logs: string[];
+  connected: boolean;
+}
+
+export const BotLogger: React.FC = () => {
+  const [clients, setClients] = useState<Record<string, Client>>({});
+  const [masterLogs, setMasterLogs] = useState<string[]>([]);
+  const [activeClient, setActiveClient] = useState<string | null>(null);
+  const [messageInput, setMessageInput] = useState('');
+  const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  const wsRef = useRef<WebSocket | null>(null);
+  const masterLogRef = useRef<HTMLDivElement>(null);
+  const clientLogRefs = useRef<Record<string, HTMLDivElement>>({});
+
+  // WebSocket connection
+  useEffect(() => {
+    const connectWebSocket = () => {
+      try {
+        const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
+        const ws = new WebSocket(`${wsProtocol}://${location.host}/ws/`);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          console.log('WebSocket connected');
+          setWsStatus('connected');
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            handleWebSocketMessage(data);
+          } catch (error) {
+            console.error('Error parsing WebSocket message:', error);
+          }
+        };
+
+        ws.onclose = () => {
+          console.log('WebSocket disconnected');
+          setWsStatus('disconnected');
+          setTimeout(connectWebSocket, 3000);
+        };
+
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+          setWsStatus('disconnected');
+        };
+      } catch (error) {
+        console.error('Error creating WebSocket:', error);
+        setWsStatus('disconnected');
+        setTimeout(connectWebSocket, 3000);
+      }
+    };
+
+    connectWebSocket();
+    
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
+
+  const handleWebSocketMessage = (data: any) => {
+    console.log('Received WebSocket message:', data);
+    
+    try {
+      switch (data.type) {
+        case 'client_connect':
+          setClients(prev => {
+            const updated = {
+              ...prev,
+              [data.id]: {
+                id: data.id,
+                name: data.name || data.id,
+                status: { loaded: false, logged: false, scriptRunning: false, loadedScript: '' },
+                logs: [],
+                connected: true
+              }
+            };
+            return updated;
+          });
+          setActiveClient(prev => prev || data.id);
+          break;
+
+        case 'client_disconnect':
+          setClients(prev => {
+            const updated = { ...prev };
+            delete updated[data.id];
+            
+            // Update active client if needed
+            if (Object.keys(updated).length === 0) {
+              setActiveClient(null);
+            } else if (data.id === activeClient) {
+              const remainingIds = Object.keys(updated);
+              setActiveClient(remainingIds[0] || null);
+            }
+            
+            return updated;
+          });
+          break;
+
+        case 'update_tab_name':
+          setClients(prev => ({
+            ...prev,
+            [data.id]: prev[data.id] ? { ...prev[data.id], name: data.name } : prev[data.id]
+          }));
+          break;
+
+        case 'update_status':
+          setClients(prev => ({
+            ...prev,
+            [data.id]: prev[data.id] ? {
+              ...prev[data.id],
+              status: { ...prev[data.id].status, [data.field]: data.value }
+            } : prev[data.id]
+          }));
+          break;
+
+        case 'log':
+          setClients(prev => ({
+            ...prev,
+            [data.id]: prev[data.id] ? {
+              ...prev[data.id],
+              logs: [...prev[data.id].logs, data.message]
+            } : prev[data.id]
+          }));
+          break;
+
+        case 'master_log':
+          setMasterLogs(prev => [...prev, data.message]);
+          break;
+
+        case 'clear_master_log':
+          setMasterLogs([]);
+          break;
+
+        default:
+          console.warn('Unknown WebSocket message type:', data.type);
+      }
+    } catch (error) {
+      console.error('Error handling WebSocket message:', error, data);
+    }
+  };
+
+  // Auto-scroll logs
+  useEffect(() => {
+    if (masterLogRef.current) {
+      masterLogRef.current.scrollTop = masterLogRef.current.scrollTop;
+    }
+  }, [masterLogs]);
+
+  useEffect(() => {
+    if (activeClient && clientLogRefs.current[activeClient]) {
+      clientLogRefs.current[activeClient].scrollTop = clientLogRefs.current[activeClient].scrollHeight;
+    }
+  }, [clients, activeClient]);
+
+  const sendMessage = () => {
+    if (!messageInput.trim() || !activeClient || !wsRef.current) return;
+
+    try {
+      wsRef.current.send(JSON.stringify({
+        type: 'send_to_client',
+        id: activeClient,
+        message: messageInput.trim()
+      }));
+      setMessageInput('');
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
+  };
+
+  const clearMasterLog = () => {
+    if (!wsRef.current) return;
+    
+    try {
+      wsRef.current.send(JSON.stringify({ type: 'clear_master_log' }));
+    } catch (error) {
+      console.error('Error clearing master log:', error);
+    }
+  };
+
+  const getStatusIcon = (status: ClientStatus) => {
+    if (status.scriptRunning) return <Play className="w-4 h-4 text-success" />;
+    if (status.logged) return <Shield className="w-4 h-4 text-info" />;
+    if (status.loaded) return <Activity className="w-4 h-4 text-warning" />;
+    return <Circle className="w-4 h-4 text-muted-foreground" />;
+  };
+
+  const StatusBadge: React.FC<{ label: string; active: boolean; variant?: 'success' | 'warning' | 'info' | 'default' }> = ({ 
+    label, 
+    active, 
+    variant = 'default' 
+  }) => (
+    <Badge 
+      variant={active ? variant : 'secondary'}
+      className={cn(
+        "text-xs font-medium transition-all duration-300",
+        active && "animate-pulse-glow"
+      )}
+    >
+      {label}
+    </Badge>
+  );
+
+  const clientEntries = Object.entries(clients);
+
+  return (
+    <div className="min-h-screen p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <Bot className="w-8 h-8 text-primary" />
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              AQW Bot Logger
+            </h1>
+          </div>
+          <Badge 
+            variant={wsStatus === 'connected' ? 'default' : 'destructive'}
+            className={cn(
+              "transition-all duration-300",
+              wsStatus === 'connected' && "bg-success text-success-foreground"
+            )}
+          >
+            {wsStatus === 'connecting' && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+            {wsStatus}
+          </Badge>
+        </div>
+        
+        <div className="text-sm text-muted-foreground">
+          {clientEntries.length} client(s) connected
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Client Management */}
+        <div className="xl:col-span-2 space-y-4">
+          <Card className="animate-slide-up">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <User className="w-5 h-5" />
+                <span>Connected Clients</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {clientEntries.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No clients connected
+                </div>
+              ) : (
+                <Tabs value={activeClient || ''} onValueChange={setActiveClient}>
+                  <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                    {clientEntries.map(([id, client]) => (
+                      <TabsTrigger 
+                        key={id} 
+                        value={id} 
+                        className="flex items-center space-x-2 transition-all duration-300"
+                      >
+                        {getStatusIcon(client.status)}
+                        <span className="truncate">{client.name}</span>
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+
+                  {clientEntries.map(([id, client]) => (
+                    <TabsContent key={id} value={id} className="mt-4 space-y-4">
+                      {/* Client Status */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg flex items-center justify-between">
+                            <span>{client.name}</span>
+                            <div className="flex space-x-2">
+                              <StatusBadge 
+                                label="Map Loaded" 
+                                active={client.status.loaded}
+                                variant="warning"
+                              />
+                              <StatusBadge 
+                                label="Logged In" 
+                                active={client.status.logged}
+                                variant="info"
+                              />
+                              <StatusBadge 
+                                label="Script Running" 
+                                active={client.status.scriptRunning}
+                                variant="success"
+                              />
+                            </div>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-sm text-muted-foreground">
+                            <strong>Loaded Script:</strong> {client.status.loadedScript || 'None'}
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Client Logs */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center space-x-2">
+                            <MessageSquare className="w-5 h-5" />
+                            <span>Client Logs</span>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ScrollArea className="h-64 w-full rounded-md border p-4 bg-muted/20">
+                            <div 
+                              ref={el => { if (el) clientLogRefs.current[id] = el; }}
+                              className="space-y-1"
+                            >
+                              {client.logs.map((log, index) => (
+                                <div 
+                                  key={index} 
+                                  className="text-sm font-mono text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                  {log}
+                                </div>
+                              ))}
+                            </div>
+                          </ScrollArea>
+
+                          {/* Message Input */}
+                          <div className="flex space-x-2 mt-4">
+                            <Input
+                              placeholder="Send command to client..."
+                              value={messageInput}
+                              onChange={(e) => setMessageInput(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                              className="flex-1"
+                            />
+                            <Button onClick={sendMessage} size="sm">
+                              <Send className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Master Log */}
+        <div className="space-y-4">
+          <Card className="animate-slide-up">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Zap className="w-5 h-5" />
+                  <span>Master Log</span>
+                </div>
+                <Button 
+                  onClick={clearMasterLog} 
+                  size="sm" 
+                  variant="outline"
+                  className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-96 w-full rounded-md border p-4 bg-muted/20">
+                <div 
+                  ref={masterLogRef}
+                  className="space-y-1"
+                >
+                  {masterLogs.map((log, index) => (
+                    <div 
+                      key={index} 
+                      className="text-sm font-mono text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {log}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+};
